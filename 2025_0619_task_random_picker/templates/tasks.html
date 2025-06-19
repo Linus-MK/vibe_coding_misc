@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>タスク管理</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>タスク管理</h1>
+        <a href="{{ url_for('index') }}">メインページに戻る</a>
+
+        <div class="card">
+            <h2>新しいタスクを追加</h2>
+            <form action="{{ url_for('add_task') }}" method="post">
+                <div class="form-group">
+                    <label for="name">タスク名:</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="prep_time_seconds">準備時間 (秒):</label>
+                    <input type="number" id="prep_time_seconds" name="prep_time_seconds" placeholder="デフォルト 15秒">
+                </div>
+                <div class="form-group">
+                    <label for="duration_minutes">実行時間 (分):</label>
+                    <input type="number" id="duration_minutes" name="duration_minutes" required>
+                </div>
+                <div class="form-group">
+                    <label for="url">URL:</label>
+                    <input type="text" id="url" name="url" placeholder="http://...">
+                </div>
+                <button type="submit" class="btn">追加</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>タスク一覧</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>タスク名</th>
+                        <th>準備(秒)</th>
+                        <th>実行(分)</th>
+                        <th>URL</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in tasks %}
+                    <tr>
+                        <td>{{ task['name'] }}</td>
+                        <td>{{ task['prep_time_seconds'] }}</td>
+                        <td>{{ task['duration_minutes'] }}</td>
+                        <td><a href="{{ task['url'] }}" target="_blank">{{ task['url'] }}</a></td>
+                        <td>
+                            <form action="{{ url_for('delete_task', task_id=task['id']) }}" method="post" style="display:inline;">
+                                <button type="submit" class="btn btn-danger">削除</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

@@ -11,24 +11,34 @@
         <h1>今日のタスク</h1>
         <a href="{{ url_for('task_list') }}">タスクを管理する</a>
 
-        <div id="task-container" class="card">
-            <h2 id="task-name">タスクを読み込み中...</h2>
-            <p id="task-url-container" style="display: none;">
-                参考URL: <a id="task-url" href="#" target="_blank"></a>
+        {% if task %}
+        <div id="task-container" 
+             class="card"
+             data-task-id="{{ task['id'] }}"
+             data-task-name="{{ task['name'] }}"
+             data-prep-time="{{ task['prep_time_seconds'] }}"
+             data-duration-time="{{ task['duration_minutes'] }}"
+             data-task-url="{{ task['url'] or '' }}">
+
+            <h2 id="task-name">{{ task['name'] }}</h2>
+            
+            <p id="task-url-container" {% if not task['url'] %}style="display: none;"{% endif %}>
+                参考URL: <a id="task-url" href="{{ task['url'] or '#' }}" target="_blank">{{ task['url'] }}</a>
             </p>
             <div id="timer-display">
-                <p id="timer-status">準備中</p>
-                <p id="timer">00:00</p>
+                <p id="timer-status">準備して！</p>
+                <p id="timer">{{ "%02d"|format(task['prep_time_seconds'] // 60) }}:{{ "%02d"|format(task['prep_time_seconds'] % 60) }}</p>
             </div>
             <div id="controls">
                 <button id="reroll-btn" class="btn">気分じゃない (再抽選)</button>
             </div>
         </div>
-        
-        <div id="no-task-message" class="card" style="display: none;">
+        {% else %}
+        <div id="no-task-message" class="card">
             <h2>タスクがありません</h2>
             <p>はじめに<a href="{{ url_for('task_list') }}">タスク管理ページ</a>でタスクを追加してください。</p>
         </div>
+        {% endif %}
     </div>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>

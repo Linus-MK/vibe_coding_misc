@@ -143,4 +143,5 @@ cython_debug/
 tasks.db
 *.db
 *.db-journal
-instance/ 
+instance/
+data/

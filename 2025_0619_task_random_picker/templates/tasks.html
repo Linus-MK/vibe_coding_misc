@@ -12,6 +12,27 @@
         <a href="{{ url_for('index') }}">メインページに戻る</a>
 
         <div class="card">
+            <h2>インポート・エクスポート</h2>
+            <div style="display: flex; justify-content: space-between; gap: 2rem;">
+                <div style="flex: 1;">
+                    <h4>エクスポート</h4>
+                    <p>現在のタスク一覧をCSVファイルとしてダウンロードします。</p>
+                    <a href="{{ url_for('export_tasks') }}" class="btn">エクスポート</a>
+                </div>
+                <div style="flex: 1;">
+                    <h4>インポート</h4>
+                    <p>CSVファイルをアップロードしてタスクを一括登録します。<br><strong>注意: 既存のタスクはすべて上書きされます。</strong></p>
+                    <form id="import-form" action="{{ url_for('import_tasks') }}" method="post" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <input type="file" name="file" accept=".csv" required>
+                        </div>
+                        <button type="submit" class="btn btn-danger">インポートして上書き</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
             <h2 id="form-title">新しいタスクを追加</h2>
             <form id="task-form" action="{{ url_for('add_task') }}" method="post">
                 <input type="hidden" id="task-id" name="task_id">
@@ -103,6 +124,13 @@
 
             document.getElementById('submit-button').innerText = '追加';
             document.getElementById('cancel-button').style.display = 'none';
+        });
+
+        document.getElementById('import-form').addEventListener('submit', function(event) {
+            const confirmation = confirm('現在のタスクはすべて上書きされますがよろしいですか？');
+            if (!confirmation) {
+                event.preventDefault();
+            }
         });
     </script>
 </body>

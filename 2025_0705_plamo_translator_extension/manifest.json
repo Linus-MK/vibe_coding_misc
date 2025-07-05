@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Plamo Quick Translator",
+  "version": "1.0",
+  "description": "選択したテキストをPLaMoのデモサイトで素早く翻訳します。",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "contextMenus",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://translate-demo.plamo.preferredai.jp/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "PLaMoで翻訳"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+L",
+        "mac": "Command+Shift+L"
+      },
+      "description": "選択したテキストをPLaMoで翻訳"
+    }
+  }
+}

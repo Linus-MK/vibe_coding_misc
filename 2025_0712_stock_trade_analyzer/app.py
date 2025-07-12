@@ -66,7 +66,29 @@ def view_csv(upload_type, filename):
             for col in ['sale_price', 'commission', 'acquisition_price', 'profit_loss']:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
 
-        else: # upload_type == 'yakujo' など、他のファイル形式
+        elif upload_type == 'yakujo':
+            # 約定履歴のフォーマットに対応
+            column_names = [
+                'contract_date', 'name', 'ticker_code', 'market', 'category', 
+                'trade_period', 'account_type', 'order_type', 'quantity', 
+                'unit_price', 'total_price', 'commission', 'delivery_date', 
+                'profit_loss_settlement'
+            ]
+            df = pd.read_csv(filepath, encoding='shift-jis', skiprows=8, header=None, names=column_names, dtype=str)
+
+            # データクレンジング
+            # 株式取引のデータのみを対象とする（銘柄コードがない行は除外）
+            df = df.dropna(subset=['ticker_code'])
+            df = df[df['ticker_code'].str.strip() != '']
+
+            # 不要な文字の削除と型変換
+            for col in ['quantity', 'total_price', 'commission']:
+                df[col] = pd.to_numeric(df[col].str.replace(',', ''), errors='coerce').fillna(0).astype(int)
+            df['unit_price'] = pd.to_numeric(df['unit_price'].str.replace(',', ''), errors='coerce').fillna(0)
+            df['profit_loss_settlement'] = pd.to_numeric(df['profit_loss_settlement'].str.replace(',', ''), errors='coerce').fillna(0)
+
+
+        else: # その他のファイル形式
             try:
                 df = pd.read_csv(filepath, encoding='utf-8')
             except UnicodeDecodeError:

@@ -17,11 +17,11 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
-        flash('ファイルが選択されていません')
+        flash('ファイルが選択されていません', 'danger')
         return redirect(request.url)
     file = request.files['file']
     if file.filename == '':
-        flash('ファイルが選択されていません')
+        flash('ファイルが選択されていません', 'danger')
         return redirect(request.url)
     if file and file.filename.endswith('.csv'):
         filename = secure_filename(file.filename)
@@ -34,10 +34,10 @@ def upload_file():
             
         filepath = os.path.join(save_dir, filename)
         file.save(filepath)
-        flash(f'{upload_type.capitalize()} ファイルのアップロードが成功しました: {filename}')
+        flash(f'{upload_type.capitalize()} ファイルのアップロードが成功しました: {filename}', 'success')
         return redirect(url_for('view_csv', upload_type=upload_type, filename=filename))
     else:
-        flash('許可されていないファイルタイプです。CSVファイルを選択してください。')
+        flash('許可されていないファイルタイプです。CSVファイルを選択してください。', 'danger')
         return redirect(url_for('index'))
 
 @app.route('/view/<upload_type>/<filename>')
@@ -45,12 +45,20 @@ def view_csv(upload_type, filename):
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], upload_type, secure_filename(filename))
 
     if not os.path.exists(filepath):
-        flash('ファイルが見つかりません。')
+        flash('ファイルが見つかりません。', 'danger')
         return redirect(url_for('index'))
 
     try:
         df = None
         if upload_type == 'jotoeki':
+            # --- ヘッダー情報（対象期間など）の読み込み ---
+            header_df = pd.read_csv(filepath, encoding='shift-jis', skiprows=4, nrows=1)
+            header_info = {
+                'start_date': header_df.columns[0],
+                'end_date': header_df.columns[1],
+                'count': header_df.columns[2]
+            }
+
             # 譲渡益税明細の特殊なフォーマットに対応
             column_names = [
                 'ticker_code', 'name', 'cancellation_category', 'contract_date', 
@@ -66,15 +74,57 @@ def view_csv(upload_type, filename):
             for col in ['sale_price', 'commission', 'acquisition_price', 'profit_loss']:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
 
+            # --- 損益分析 ---
+            analysis_results = {}
+            if not df.empty:
+                total_pl = df['profit_loss'].sum()
+                wins = df[df['profit_loss'] > 0]
+                losses = df[df['profit_loss'] < 0]
+                win_count = len(wins)
+                loss_count = len(losses)
+                total_profit = wins['profit_loss'].sum()
+                total_loss = abs(losses['profit_loss'].sum())
+                
+                analysis_results = {
+                    'total_pl': f"{total_pl:,.0f} 円",
+                    'win_count': win_count,
+                    'loss_count': loss_count,
+                    'win_rate': f"{(win_count / (win_count + loss_count) * 100):.2f} %" if (win_count + loss_count) > 0 else "0.00 %",
+                    'avg_profit': f"{total_profit / win_count:,.0f} 円" if win_count > 0 else "0 円",
+                    'avg_loss': f"{total_loss / loss_count:,.0f} 円" if loss_count > 0 else "0 円",
+                    'profit_factor': f"{(total_profit / total_loss):.2f}" if total_loss > 0 else "∞",
+                }
+            
+            # --- グラフ用データ ---
+            chart_data = None
+            if not df.empty:
+                # 日付の型をdatetimeに変換
+                df['delivery_date'] = pd.to_datetime(df['delivery_date'], format='%Y/%m/%d')
+                
+                # ヘッダー情報から期間全体のカレンダーを作成
+                start_date = pd.to_datetime(header_info['start_date'], format='%Y年%m月%d日')
+                end_date = pd.to_datetime(header_info['end_date'], format='%Y年%m月%d日')
+                all_dates = pd.date_range(start=start_date, end=end_date, freq='D')
+
+                # 日別損益を集計し、期間全体のカレンダーにマッピング
+                daily_pl = df.groupby('delivery_date')['profit_loss'].sum()
+                daily_pl_full = daily_pl.reindex(all_dates, fill_value=0)
+                
+                chart_data = {
+                    'labels': daily_pl_full.index.strftime('%Y-%m-%d').tolist(),
+                    'data': daily_pl_full.values.tolist(),
+                }
+
+
         elif upload_type == 'yakujo':
             # 約定履歴のフォーマットに対応
             column_names = [
-                'contract_date', 'name', 'ticker_code', 'market', 'category', 
-                'trade_period', 'account_type', 'order_type', 'quantity', 
-                'unit_price', 'total_price', 'commission', 'delivery_date', 
-                'profit_loss_settlement'
+                'contract_date', 'name', 'ticker_code', 'market', 'transaction_type', 
+                'period', 'account_type', 'tax_category', 'quantity', 
+                'unit_price', 'commission', 'tax', 'delivery_date', 
+                'settlement_amount'
             ]
-            df = pd.read_csv(filepath, encoding='shift-jis', skiprows=8, header=None, names=column_names, dtype=str)
+            df = pd.read_csv(filepath, encoding='shift-jis', skiprows=9, header=None, names=column_names, dtype=str)
 
             # データクレンジング
             # 株式取引のデータのみを対象とする（銘柄コードがない行は除外）
@@ -82,10 +132,10 @@ def view_csv(upload_type, filename):
             df = df[df['ticker_code'].str.strip() != '']
 
             # 不要な文字の削除と型変換
-            for col in ['quantity', 'total_price', 'commission']:
+            for col in ['quantity', 'commission', 'tax']:
                 df[col] = pd.to_numeric(df[col].str.replace(',', ''), errors='coerce').fillna(0).astype(int)
             df['unit_price'] = pd.to_numeric(df['unit_price'].str.replace(',', ''), errors='coerce').fillna(0)
-            df['profit_loss_settlement'] = pd.to_numeric(df['profit_loss_settlement'].str.replace(',', ''), errors='coerce').fillna(0)
+            df['settlement_amount'] = pd.to_numeric(df['settlement_amount'].str.replace(',', ''), errors='coerce').fillna(0)
 
 
         else: # その他のファイル形式
@@ -95,9 +145,12 @@ def view_csv(upload_type, filename):
                 df = pd.read_csv(filepath, encoding='shift-jis')
         
         table_html = df.to_html(classes='table table-striped table-hover', index=False, border=0)
-        return render_template('view_data.html', table=table_html, filename=filename, upload_type=upload_type)
+        return render_template('view_data.html', table=table_html, filename=filename, upload_type=upload_type, 
+                               header_info=header_info if 'header_info' in locals() else None,
+                               analysis_results=analysis_results if 'analysis_results' in locals() else None,
+                               chart_data=chart_data if 'chart_data' in locals() else None)
     except Exception as e:
-        flash(f'CSVファイルの読み込み中にエラーが発生しました: {e}')
+        flash(f'CSVファイルの読み込み中にエラーが発生しました: {e}', 'danger')
         return redirect(url_for('index'))
 
 if __name__ == '__main__':

@@ -7,15 +7,77 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   </head>
   <body>
+    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+      <symbol id="check-circle-fill" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
+      </symbol>
+    </svg>
     <div class="container mt-4">
       <a href="{{ url_for('index') }}" class="btn btn-secondary mb-3">戻る</a>
       <h1>{{ upload_type | replace('jotoeki', '譲渡益税明細') | replace('yakujo', '約定履歴') }}: {{ filename }}</h1>
       
+      {% if header_info %}
+      <div class="card my-4">
+        <div class="card-header">
+          ファイル情報
+        </div>
+        <div class="card-body">
+          <dl class="row">
+            <dt class="col-sm-3">受渡開始年月日</dt>
+            <dd class="col-sm-9">{{ header_info.start_date }}</dd>
+
+            <dt class="col-sm-3">受渡終了年月日</dt>
+            <dd class="col-sm-9">{{ header_info.end_date }}</dd>
+
+            <dt class="col-sm-3">明細数</dt>
+            <dd class="col-sm-9">{{ header_info.count }}</dd>
+          </dl>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if analysis_results %}
+      <div class="card my-4">
+        <div class="card-header">
+          パフォーマンスサマリー
+        </div>
+        <div class="card-body">
+          <dl class="row">
+            <dt class="col-sm-3">合計損益</dt>
+            <dd class="col-sm-9">{{ analysis_results.total_pl }}</dd>
+
+            <dt class="col-sm-3">勝率</dt>
+            <dd class="col-sm-9">{{ analysis_results.win_rate }}（{{ analysis_results.win_count }}勝 / {{ analysis_results.loss_count }}敗）</dd>
+
+            <dt class="col-sm-3">平均利益 / 平均損失</dt>
+            <dd class="col-sm-9">{{ analysis_results.avg_profit }} / {{ analysis_results.avg_loss }}</dd>
+
+            <dt class="col-sm-3">プロフィットファクター</dt>
+            <dd class="col-sm-9">{{ analysis_results.profit_factor }}</dd>
+          </dl>
+        </div>
+      </div>
+      
+      <div class="card my-4">
+        <div class="card-header">
+          日別損益グラフ
+        </div>
+        <div class="card-body">
+          <canvas id="plChart"></canvas>
+        </div>
+      </div>
+      {% endif %}
+
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           {% for category, message in messages %}
-            <div class="alert alert-danger" role="alert">
-              {{ message }}
+            <div class="alert alert-{{ category|default('info') }} d-flex align-items-center" role="alert">
+              {% if category == 'success' %}
+                <svg class="bi flex-shrink-0 me-2" width="24" height="24" role="img" aria-label="Success:"><use xlink:href="#check-circle-fill"/></svg>
+              {% endif %}
+              <div>
+                {{ message }}
+              </div>
             </div>
           {% endfor %}
         {% endif %}
@@ -27,5 +89,33 @@
 
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    {% if chart_data %}
+    <script>
+      const ctx = document.getElementById('plChart');
+      const chartData = {{ chart_data | tojson }};
+      
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: chartData.labels,
+          datasets: [{
+            label: '日別損益',
+            data: chartData.data,
+            backgroundColor: chartData.data.map(value => value > 0 ? 'rgba(54, 162, 235, 0.6)' : 'rgba(255, 99, 132, 0.6)'),
+            borderColor: chartData.data.map(value => value > 0 ? 'rgba(54, 162, 235, 1)' : 'rgba(255, 99, 132, 1)'),
+            borderWidth: 1
+          }]
+        },
+        options: {
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    </script>
+    {% endif %}
   </body>
 </html> 

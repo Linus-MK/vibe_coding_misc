@@ -114,6 +114,21 @@ def view_csv(upload_type, filename):
                     'labels': daily_pl_full.index.strftime('%Y-%m-%d').tolist(),
                     'data': daily_pl_full.values.tolist(),
                 }
+            
+            # --- 表示用にカラム名を日本語化し、不要な列を削除 ---
+            display_df = df.drop(columns=['acquisition_date', 'cancellation_category'])
+            display_df = display_df.rename(columns={
+                'ticker_code': '銘柄コード',
+                'name': '銘柄',
+                'contract_date': '約定日',
+                'quantity': '数量',
+                'transaction_type': '取引',
+                'delivery_date': '受渡日',
+                'sale_price': '売却/決済金額',
+                'commission': '費用',
+                'acquisition_price': '取得/新規金額',
+                'profit_loss': '損益金額/徴収額'
+            })
 
 
         elif upload_type == 'yakujo':
@@ -125,17 +140,24 @@ def view_csv(upload_type, filename):
                 'settlement_amount'
             ]
             df = pd.read_csv(filepath, encoding='shift-jis', skiprows=9, header=None, names=column_names, dtype=str)
+            display_df = df.copy()
 
             # データクレンジング
             # 株式取引のデータのみを対象とする（銘柄コードがない行は除外）
             df = df.dropna(subset=['ticker_code'])
             df = df[df['ticker_code'].str.strip() != '']
+            display_df = df[df['ticker_code'].str.strip() != '']
 
             # 不要な文字の削除と型変換
             for col in ['quantity', 'commission', 'tax']:
                 df[col] = pd.to_numeric(df[col].str.replace(',', ''), errors='coerce').fillna(0).astype(int)
             df['unit_price'] = pd.to_numeric(df['unit_price'].str.replace(',', ''), errors='coerce').fillna(0)
             df['settlement_amount'] = pd.to_numeric(df['settlement_amount'].str.replace(',', ''), errors='coerce').fillna(0)
+            display_df['quantity'] = pd.to_numeric(display_df['quantity'].str.replace(',', ''), errors='coerce').fillna(0).astype(int)
+            display_df['commission'] = pd.to_numeric(display_df['commission'].str.replace(',', ''), errors='coerce').fillna(0).astype(int)
+            display_df['tax'] = pd.to_numeric(display_df['tax'].str.replace(',', ''), errors='coerce').fillna(0).astype(int)
+            display_df['unit_price'] = pd.to_numeric(display_df['unit_price'].str.replace(',', ''), errors='coerce').fillna(0)
+            display_df['settlement_amount'] = pd.to_numeric(display_df['settlement_amount'].str.replace(',', ''), errors='coerce').fillna(0)
 
 
         else: # その他のファイル形式
@@ -143,8 +165,9 @@ def view_csv(upload_type, filename):
                 df = pd.read_csv(filepath, encoding='utf-8')
             except UnicodeDecodeError:
                 df = pd.read_csv(filepath, encoding='shift-jis')
+            display_df = df.copy()
         
-        table_html = df.to_html(classes='table table-striped table-hover', index=False, border=0)
+        table_html = display_df.to_html(classes='table table-striped table-hover', index=False, border=0)
         return render_template('view_data.html', table=table_html, filename=filename, upload_type=upload_type, 
                                header_info=header_info if 'header_info' in locals() else None,
                                analysis_results=analysis_results if 'analysis_results' in locals() else None,
@@ -152,6 +175,43 @@ def view_csv(upload_type, filename):
     except Exception as e:
         flash(f'CSVファイルの読み込み中にエラーが発生しました: {e}', 'danger')
         return redirect(url_for('index'))
+
+@app.route('/analysis/summary/<filename>')
+def analysis_summary(filename):
+    # 分析対象は譲渡益税明細のみ
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], 'jotoeki', secure_filename(filename))
+
+    if not os.path.exists(filepath):
+        flash('分析対象のファイルが見つかりません。', 'danger')
+        return redirect(url_for('index'))
+
+    try:
+        column_names = [
+            'ticker_code', 'name', 'cancellation_category', 'contract_date', 
+            'quantity', 'transaction_type', 'delivery_date', 'sale_price', 
+            'commission', 'acquisition_date', 'acquisition_price', 'profit_loss'
+        ]
+        df = pd.read_csv(filepath, encoding='shift-jis', skiprows=21, header=None, names=column_names, dtype=str)
+        df = df.dropna(how='all')
+        df['profit_loss'] = pd.to_numeric(df['profit_loss'], errors='coerce').fillna(0).astype(int)
+
+        # 銘柄・日付で集計
+        summary_df = df.groupby(['ticker_code', 'name', 'contract_date', 'delivery_date'])['profit_loss'].sum().reset_index()
+        summary_df = summary_df.rename(columns={
+            'ticker_code': '銘柄コード',
+            'name': '銘柄',
+            'contract_date': '約定日',
+            'delivery_date': '受渡日',
+            'profit_loss': '合計損益'
+        })
+
+        table_html = summary_df.to_html(classes='table table-striped table-hover', index=False, border=0)
+        return render_template('analysis_summary.html', table=table_html, filename=filename)
+
+    except Exception as e:
+        flash(f'集計中にエラーが発生しました: {e}', 'danger')
+        return redirect(url_for('index'))
+
 
 if __name__ == '__main__':
     app.run(debug=True)

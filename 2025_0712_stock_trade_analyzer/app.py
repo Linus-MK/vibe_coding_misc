@@ -194,19 +194,33 @@ def analysis_summary(filename):
         df = pd.read_csv(filepath, encoding='shift-jis', skiprows=21, header=None, names=column_names, dtype=str)
         df = df.dropna(how='all')
         df['profit_loss'] = pd.to_numeric(df['profit_loss'], errors='coerce').fillna(0).astype(int)
+        df['delivery_date'] = pd.to_datetime(df['delivery_date'], format='%Y/%m/%d')
 
-        # 銘柄・日付で集計
-        summary_df = df.groupby(['ticker_code', 'name', 'contract_date', 'delivery_date'])['profit_loss'].sum().reset_index()
+        # 銘柄と日付でグループ化して損益を合計
+        summary_df = df.groupby(['ticker_code', 'name', 'delivery_date']).agg(
+            total_profit_loss=('profit_loss', 'sum')
+        ).reset_index()
+
+        # カラム名を日本語化
         summary_df = summary_df.rename(columns={
             'ticker_code': '銘柄コード',
             'name': '銘柄',
-            'contract_date': '約定日',
             'delivery_date': '受渡日',
-            'profit_loss': '合計損益'
+            'total_profit_loss': '合計損益'
         })
+        
+        # 日付のフォーマットを調整
+        summary_df['受渡日'] = summary_df['受渡日'].dt.strftime('%Y-%m-%d')
 
-        table_html = summary_df.to_html(classes='table table-striped table-hover', index=False, border=0)
-        return render_template('analysis_summary.html', table=table_html, filename=filename)
+
+        summary_data = summary_df.to_dict('records')
+        summary_columns = summary_df.columns.tolist()
+
+        return render_template('analysis_summary.html',
+                               filename=filename,
+                               summary_data=summary_data,
+                               summary_columns=summary_columns,
+                               file_type='jotoeki')
 
     except Exception as e:
         flash(f'集計中にエラーが発生しました: {e}', 'danger')

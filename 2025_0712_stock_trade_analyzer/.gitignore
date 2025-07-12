@@ -28,3 +28,6 @@ instance/
 
 # Uploads folder
 uploads/ 
+
+# input sample files
+input_sample/

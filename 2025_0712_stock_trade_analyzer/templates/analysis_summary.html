@@ -37,9 +37,13 @@
           </thead>
           <tbody>
             {% for row in summary_data %}
-              <tr>
+              <tr class="{% if row.rank == 'best' %}table-success{% elif row.rank == 'worst' %}table-danger{% endif %}">
                 {% for column in summary_columns %}
-                  <td>{{ row[column] }}</td>
+                  {% if column == '銘柄コード' %}
+                    <td><a href="https://kabutan.jp/stock/?code={{ row[column] }}" target="_blank">{{ row[column] }}</a></td>
+                  {% else %}
+                    <td>{{ row[column] }}</td>
+                  {% endif %}
                 {% endfor %}
               </tr>
             {% endfor %}
@@ -64,7 +68,7 @@
             // ページごとの表示件数
             "lengthMenu": [ [10, 25, 50, -1], [10, 25, 50, "すべて"] ],
             // 初期ソートを合計損益の昇順に
-            "order": [[ 3, "asc" ]]
+            "order": [[ 4, "asc" ]]
         });
     });
     </script>

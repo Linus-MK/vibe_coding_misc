@@ -196,8 +196,8 @@ def analysis_summary(filename):
         df['profit_loss'] = pd.to_numeric(df['profit_loss'], errors='coerce').fillna(0).astype(int)
         df['delivery_date'] = pd.to_datetime(df['delivery_date'], format='%Y/%m/%d')
 
-        # 銘柄と日付でグループ化して損益を合計
-        summary_df = df.groupby(['ticker_code', 'name', 'delivery_date']).agg(
+        # 銘柄、日付、取引でグループ化して損益を合計
+        summary_df = df.groupby(['ticker_code', 'name', 'delivery_date', 'transaction_type']).agg(
             total_profit_loss=('profit_loss', 'sum')
         ).reset_index()
 
@@ -206,15 +206,30 @@ def analysis_summary(filename):
             'ticker_code': '銘柄コード',
             'name': '銘柄',
             'delivery_date': '受渡日',
+            'transaction_type': '取引',
             'total_profit_loss': '合計損益'
         })
         
+        # --- ベスト3とワースト3を判定 ---
+        # 損益でソートされたコピーを作成
+        sorted_df = summary_df.sort_values(by='合計損益', ascending=False).copy()
+        
+        # 0円の取引は除外してインデックスを取得
+        best_indices = sorted_df[sorted_df['合計損益'] > 0].head(3).index
+        worst_indices = sorted_df[sorted_df['合計損益'] < 0].tail(3).index
+
+        # 元のDataFrameに'rank'列を追加
+        summary_df['rank'] = ''
+        summary_df.loc[best_indices, 'rank'] = 'best'
+        summary_df.loc[worst_indices, 'rank'] = 'worst'
+
         # 日付のフォーマットを調整
         summary_df['受渡日'] = summary_df['受渡日'].dt.strftime('%Y-%m-%d')
 
-
+        # テンプレートに渡すデータを作成
         summary_data = summary_df.to_dict('records')
-        summary_columns = summary_df.columns.tolist()
+        # 'rank'列はテーブルのヘッダーには不要なので除外
+        summary_columns = [col for col in summary_df.columns if col != 'rank']
 
         return render_template('analysis_summary.html',
                                filename=filename,

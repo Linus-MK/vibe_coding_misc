@@ -9,6 +9,17 @@
 <body>
     <div class="container">
         <h1>タスク管理</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
         <a href="{{ url_for('index') }}">メインページに戻る</a>
 
         <div class="card">

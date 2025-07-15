@@ -4,10 +4,11 @@ import click
 import io
 import csv
 from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, jsonify, g, Response
+from flask import Flask, render_template, request, redirect, url_for, jsonify, g, Response, flash
 
 app = Flask(__name__)
 app.config['DATABASE'] = 'tasks.db'
+app.secret_key = 'your_very_secret_key' # flashメッセージのために必要
 
 # --- Database Setup ---
 
@@ -134,27 +135,37 @@ def export_tasks():
 def import_tasks():
     """Import tasks from a CSV file, overwriting existing tasks."""
     if 'file' not in request.files:
+        flash('ファイルが選択されていません。')
         return redirect(url_for('task_list'))
     
     file = request.files['file']
     if file.filename == '':
+        flash('ファイルが選択されていません。')
         return redirect(url_for('task_list'))
 
     if file:
         try:
-            stream = io.StringIO(file.stream.read().decode("UTF-8"), newline=None)
+            # Use utf-8-sig to handle CSV with BOM
+            stream = io.StringIO(file.stream.read().decode("utf-8-sig"), newline=None)
             csv_reader = csv.reader(stream)
             
             header = next(csv_reader)
             expected_header = ['タスク名', '準備時間(秒)', '実行時間(分)', 'URL']
             if header != expected_header:
-                # Add flash message for error later if needed
+                flash(f'CSVのヘッダーが正しくありません。期待するヘッダー: {",".join(expected_header)}')
                 return redirect(url_for('task_list'))
 
             new_tasks = []
-            for row in csv_reader:
+            for i, row in enumerate(csv_reader, 2): # Start from line 2 for error reporting
+                # Skip empty rows
+                if not any(field.strip() for field in row):
+                    continue
+                
+                if len(row) != 4:
+                    raise ValueError(f'{i}行目: 列の数が正しくありません（4列である必要があります）。')
+
                 if not row[0] or not row[2]:
-                    raise ValueError("タスク名と実行時間は必須です。")
+                    raise ValueError(f'{i}行目: タスク名と実行時間は必須です。')
                 
                 new_tasks.append({
                     'name': row[0],
@@ -162,21 +173,28 @@ def import_tasks():
                     'duration': int(row[2]),
                     'url': row[3] or None
                 })
+        except ValueError as e:
+            flash(f'データのフォーマットエラー: {e}')
+            return redirect(url_for('task_list'))
         except Exception as e:
-            print(f"File processing error: {e}") # for debugging
-            # Add flash message for error later if needed
+            flash(f'ファイルの処理中に予期せぬエラーが発生しました: {e}')
             return redirect(url_for('task_list'))
             
         db = get_db()
-        db.execute('DELETE FROM tasks')
-        
-        for task in new_tasks:
-            db.execute(
-                'INSERT INTO tasks (name, prep_time_seconds, duration_minutes, url) VALUES (?, ?, ?, ?)',
-                (task['name'], task['prep_time'], task['duration'], task['url'])
-            )
-        db.commit()
-    
+        # Use transaction
+        try:
+            with db:
+                db.execute('DELETE FROM tasks')
+                for task in new_tasks:
+                    db.execute(
+                        'INSERT INTO tasks (name, prep_time_seconds, duration_minutes, url) VALUES (?, ?, ?, ?)',
+                        (task['name'], task['prep_time'], task['duration'], task['url'])
+                    )
+            flash(f'{len(new_tasks)}件のタスクをインポートしました。')
+        except sqlite3.Error as e:
+            flash(f'データベースエラー: {e}')
+            # No need to rollback, 'with db' handles it
+            
     return redirect(url_for('task_list'))
 
 # --- API Routes ---

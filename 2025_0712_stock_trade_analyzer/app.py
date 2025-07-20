@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, make_response
 import os
 from werkzeug.utils import secure_filename
 import pandas as pd
@@ -240,6 +240,58 @@ def analysis_summary(filename):
     except Exception as e:
         flash(f'集計中にエラーが発生しました: {e}', 'danger')
         return redirect(url_for('index'))
+
+
+@app.route('/download_summary/<filename>')
+def download_summary(filename):
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], 'jotoeki', secure_filename(filename))
+
+    if not os.path.exists(filepath):
+        flash('分析対象のファイルが見つかりません。', 'danger')
+        return redirect(url_for('index'))
+
+    try:
+        column_names = [
+            'ticker_code', 'name', 'cancellation_category', 'contract_date',
+            'quantity', 'transaction_type', 'delivery_date', 'sale_price',
+            'commission', 'acquisition_date', 'acquisition_price', 'profit_loss'
+        ]
+        df = pd.read_csv(filepath, encoding='shift-jis', skiprows=21, header=None, names=column_names, dtype=str)
+        df = df.dropna(how='all')
+        df['profit_loss'] = pd.to_numeric(df['profit_loss'], errors='coerce').fillna(0).astype(int)
+        df['delivery_date'] = pd.to_datetime(df['delivery_date'], format='%Y/%m/%d')
+
+        summary_df = df.groupby(['ticker_code', 'name', 'delivery_date', 'transaction_type']).agg(
+            total_profit_loss=('profit_loss', 'sum')
+        ).reset_index()
+
+        summary_df = summary_df.rename(columns={
+            'ticker_code': '銘柄コード',
+            'name': '銘柄',
+            'delivery_date': '受渡日',
+            'transaction_type': '取引',
+            'total_profit_loss': '合計損益'
+        })
+        
+        # 損益でソート
+        summary_df = summary_df.sort_values(by='合計損益', ascending=False)
+        
+        # 日付のフォーマットを調整
+        summary_df['受渡日'] = summary_df['受渡日'].dt.strftime('%Y-%m-%d')
+
+        # CSVデータを作成
+        csv_data = summary_df.to_csv(index=False, encoding='utf-8')
+
+        # レスポンスを作成
+        response = make_response(csv_data)
+        response.headers['Content-Disposition'] = f'attachment; filename=summary_{filename}'
+        response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+
+        return response
+
+    except Exception as e:
+        flash(f'CSVダウンロード中にエラーが発生しました: {e}', 'danger')
+        return redirect(url_for('analysis_summary', filename=filename))
 
 
 if __name__ == '__main__':

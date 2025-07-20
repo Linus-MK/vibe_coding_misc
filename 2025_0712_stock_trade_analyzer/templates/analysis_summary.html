@@ -12,6 +12,7 @@
   <body>
     <div class="container mt-4">
       <a href="{{ url_for('view_csv', upload_type='jotoeki', filename=filename) }}" class="btn btn-secondary mb-3">詳細ビューに戻る</a>
+      <a href="{{ url_for('download_summary', filename=filename) }}" class="btn btn-success mb-3">CSVダウンロード</a>
 
       <h1>銘柄・日付別 集計ビュー</h1>
       <p class="text-muted">{{ filename }}</p>
